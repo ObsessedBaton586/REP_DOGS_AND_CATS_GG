@@ -3,114 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detector V6.0 (Cámara Fix)</title>
+    <title>Detector V7.0 (Dos Pasos)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     
     <style>
         body { font-family: sans-serif; background: #222; text-align: center; color: white; }
+        h1 { margin: 10px; font-size: 20px; }
+        
         .video-container {
-            width: 100%; max-width: 400px; margin: 20px auto;
-            border: 2px solid #fff; border-radius: 10px;
-            background: #000; overflow: hidden; height: 300px;
+            width: 90%; max-width: 400px; margin: 10px auto;
+            border: 3px solid #fff; border-radius: 10px;
+            background: #000; height: 300px; position: relative;
         }
         video { width: 100%; height: 100%; object-fit: cover; }
         
-        button {
-            padding: 15px 30px; font-size: 20px;
-            background-color: #00ff88; color: #000;
-            border: none; border-radius: 50px; cursor: pointer;
-            font-weight: bold; margin-bottom: 20px;
+        /* Botones grandes para dedos */
+        .btn {
+            padding: 15px 30px; font-size: 18px;
+            border: none; border-radius: 10px; cursor: pointer;
+            font-weight: bold; margin: 10px; width: 80%;
         }
-        #resultado { font-size: 24px; font-weight: bold; color: yellow; margin: 10px;}
+        .btn-green { background-color: #28a745; color: white; }
+        .btn-blue { background-color: #007bff; color: white; display: none; } /* Oculto al inicio */
+        
+        #resultado { 
+            font-size: 24px; font-weight: bold; color: yellow; 
+            margin: 15px; min-height: 30px; 
+            background: rgba(255,255,255,0.1); padding: 10px; border-radius: 5px;
+        }
         #debug { font-size: 12px; color: #aaa; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-    <h1>🔍 V6.0 Debug</h1>
+    <h1>🐶 vs 🐱 (V5.0)</h1>
 
     <div class="video-container">
         <video id="webcam" autoplay playsinline muted></video>
     </div>
 
-    <div id="resultado">Esperando acción...</div>
-    <button onclick="iniciarCamara()">📷 ACTIVAR CÁMARA</button>
-    <div id="debug">Log del sistema...</div>
+    <div id="resultado">Paso 1: Enciende la cámara</div>
+    
+    <button id="btn-camara" class="btn btn-green" onclick="encenderCamara()">1. Encender Cámara</button>
+    
+    <button id="btn-ia" class="btn btn-blue" onclick="comenzarPrediccion()">2. Activar Cerebro IA</button>
+
+    <div id="debug">Esperando...</div>
 
     <script>
         let modelo = null;
+        let camaraActiva = false;
         const video = document.getElementById('webcam');
         const resultadoDiv = document.getElementById('resultado');
         const debugDiv = document.getElementById('debug');
+        const btnCamara = document.getElementById('btn-camara');
+        const btnIA = document.getElementById('btn-ia');
 
-        // Log visual para ver errores en pantalla
-        function log(texto) {
-            console.log(texto);
-            debugDiv.innerText = texto;
-        }
-
+        // Cargar modelo al iniciar la página
         (async () => {
             try {
-                log("Cargando modelo...");
-                // Intentamos cargar el grafo
+                debugDiv.innerText = "Cargando modelo...";
                 modelo = await tf.loadGraphModel('./model.json'); 
-                log("✅ Modelo cargado. Toca el botón verde.");
-                resultadoDiv.innerText = "Modelo Listo. Toca el botón.";
+                debugDiv.innerText = "Modelo cargado en memoria ✅";
             } catch (error) {
-                log("❌ Error carga: " + error.message);
+                debugDiv.innerText = "Error cargando modelo: " + error.message;
             }
         })();
 
-        async function iniciarCamara() {
-            // ALERTA 1: Confirmar que el botón sirve
-            alert("Solicitando permiso de cámara..."); 
-
+        // PASO 1: SOLO ENCENDER CÁMARA (Sin IA)
+        async function encenderCamara() {
             try {
-                // Configuración simple para evitar errores de compatibilidad
-                const constraints = { 
-                    audio: false, 
-                    video: { facingMode: "environment" } 
-                };
-
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" },
+                    audio: false
+                });
                 video.srcObject = stream;
+                video.play();
+                camaraActiva = true;
                 
-                log("Cámara accedida. Procesando...");
+                // Si la cámara funciona, ocultamos botón 1 y mostramos botón 2
+                btnCamara.style.display = "none";
+                btnIA.style.display = "inline-block";
+                resultadoDiv.innerText = "¡Cámara lista! Ahora activa la IA 👇";
                 
-                video.onloadedmetadata = () => {
-                    video.play();
-                    alert("¡Cámara iniciada! Empezando a detectar...");
-                    predecir();
-                };
             } catch (err) {
-                alert("ERROR AL ABRIR CÁMARA: " + err.name + " - " + err.message);
-                log("Fallo cámara: " + err.message);
+                alert("Error cámara: " + err.message);
             }
         }
 
-        async function predecir() {
-            if (modelo) {
-                tf.tidy(() => {
-                    // Procesamiento de imagen
-                    let img = tf.browser.fromPixels(video)
-                        .resizeNearestNeighbor([100, 100]) // Tamaño
-                        .mean(2) // Blanco y Negro
-                        .expandDims(2)
-                        .expandDims()
-                        .toFloat(); 
-                        // .div(255.0); // PRUEBA: Mantén esto comentado por ahora (datos 0-255)
+        // PASO 2: ACTIVAR PREDICCIÓN
+        function comenzarPrediccion() {
+            if (!modelo) {
+                alert("El modelo aun no carga. Espera 5 segundos.");
+                return;
+            }
+            if (!camaraActiva) {
+                alert("Primero enciende la cámara.");
+                return;
+            }
+            
+            resultadoDiv.innerText = "🧠 Pensando...";
+            btnIA.style.display = "none"; // Ocultar botón para que no estorbe
+            predecirLoop();
+        }
 
+        async function predecirLoop() {
+            try {
+                tf.tidy(() => {
+                    // 1. Captura
+                    let img = tf.browser.fromPixels(video);
+                    
+                    // 2. Ajustes (100x100, Blanco y Negro)
+                    img = tf.image.resizeNearestNeighbor(img, [100, 100]);
+                    img = tf.image.rgbToGrayscale(img); 
+                    img = img.expandDims().toFloat(); // (1, 100, 100, 1)
+
+                    // 3. Predecir
+                    // IMPORTANTE: Si se traba aquí, es que el modelo es muy pesado para el celular
                     const prediccion = modelo.predict(img).dataSync();
                     const valor = prediccion[0];
 
-                    // Mostrar valor crudo para diagnóstico
-                    resultadoDiv.innerText = valor < 0.5 ? 
-                        `🐱 GATO (${valor.toFixed(4)})` : 
-                        `🐶 PERRO (${valor.toFixed(4)})`;
+                    // 4. Mostrar
+                    if (valor >= 0.5) {
+                        resultadoDiv.innerText = "🐶 PERRO (" + valor.toFixed(2) + ")";
+                        resultadoDiv.style.color = "#00BFFF"; // Azul claro
+                    } else {
+                        resultadoDiv.innerText = "🐱 GATO (" + valor.toFixed(2) + ")";
+                        resultadoDiv.style.color = "#90EE90"; // Verde claro
+                    }
                 });
+                
+                // Ciclo infinito suave
+                requestAnimationFrame(predecirLoop);
+                
+            } catch (err) {
+                debugDiv.innerText = "Error al predecir: " + err.message;
             }
-            // Loop
-            requestAnimationFrame(predecir);
         }
     </script>
 </body>
