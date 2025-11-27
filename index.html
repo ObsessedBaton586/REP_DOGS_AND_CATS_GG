@@ -3,132 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detector Versión 4.0</title> <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <title>Detector V5.0 (Diagnóstico)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     
     <style>
-        body {
-            font-family: sans-serif;
-            background-color: #f0f2f5;
-            text-align: center;
-            padding: 20px;
-            color: #333;
-        }
-        h1 { margin-bottom: 10px; }
+        body { font-family: sans-serif; background: #f0f2f5; text-align: center; color: #333; }
         .video-container {
-            position: relative;
-            width: 100%;
-            max-width: 400px;
-            margin: 0 auto;
-            border: 5px solid #fff;
-            border-radius: 15px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-            overflow: hidden;
-            background: #000;
+            width: 100%; max-width: 400px; margin: 0 auto;
+            border: 5px solid #fff; border-radius: 15px;
+            background: #000; overflow: hidden;
         }
-        video { width: 100%; display: block; }
-        button {
-            margin-top: 20px;
-            padding: 12px 25px;
-            font-size: 18px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 50px;
-            cursor: pointer;
-        }
-        button:disabled { background-color: #ccc; }
+        video { width: 100%; }
         #resultado {
-            margin-top: 20px;
-            font-size: 20px;
-            font-weight: bold;
-            padding: 15px;
-            background: white;
-            border-radius: 10px;
-            display: inline-block;
-            word-wrap: break-word;
+            margin-top: 20px; font-size: 24px; font-weight: bold;
+            padding: 20px; background: white; border-radius: 10px;
+            display: inline-block; border: 2px solid #ddd;
         }
+        #probabilidad { font-size: 16px; color: #666; margin-top: 5px; }
     </style>
 </head>
 <body>
 
-    <h1>🐶 vs 🐱 (V4.0)</h1>
+    <h1>🐶 vs 🐱 (V5.0)</h1>
 
     <div class="video-container">
         <video id="webcam" autoplay playsinline muted></video>
     </div>
 
-    <div id="resultado">Cargando modelo... ⏳</div>
+    <div id="resultado">Cargando...</div>
+    <div id="probabilidad"></div>
     <br>
-    <button id="btn-camara" onclick="iniciarCamara()" disabled>Iniciar Cámara</button>
+    <button onclick="iniciarCamara()">Iniciar Cámara</button>
 
     <script>
         let modelo = null;
         const video = document.getElementById('webcam');
         const resultadoDiv = document.getElementById('resultado');
-        const btnCamara = document.getElementById('btn-camara');
+        const probDiv = document.getElementById('probabilidad');
 
         (async () => {
             try {
-                console.log("Intentando cargar modelo...");
-                
-                // --- CAMBIO IMPORTANTE AQUÍ ---
-                // Cambiamos loadLayersModel por loadGraphModel
+                // Cargamos el grafo
                 modelo = await tf.loadGraphModel('./model.json'); 
-                
-                console.log("Modelo cargado exitosamente");
-                resultadoDiv.innerText = "Modelo cargado. ¡Listo!";
-                btnCamara.disabled = false;
+                resultadoDiv.innerText = "Modelo listo ✅";
             } catch (error) {
-                console.error("Error detallado:", error);
-                resultadoDiv.innerText = "FALLO: " + error.message;
-                resultadoDiv.style.color = "red";
+                resultadoDiv.innerText = "Error: " + error.message;
             }
         })();
 
         async function iniciarCamara() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment" } 
-                });
-                video.srcObject = stream;
-                btnCamara.style.display = "none";
-                video.onloadedmetadata = () => {
-                    predecirEnTiempoReal();
-                };
-            } catch (err) {
-                alert("Error cámara: " + err.message);
-            }
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            video.srcObject = stream;
+            video.onloadedmetadata = () => predecir();
         }
 
-        async function predecirEnTiempoReal() {
+        function predecir() {
             if (modelo) {
                 tf.tidy(() => {
-                    // Preprocesamiento (100x100, B/N, Normalizado)
-                    let img = tf.browser.fromPixels(video)
-                        .resizeNearestNeighbor([100, 100])
-                        .mean(2)
-                        .expandDims(2)
-                        .expandDims()
-                        .toFloat()
-                        .div(255.0);
-
-                    // Para GraphModel, a veces predict funciona igual, a veces requiere execute.
-                    // Probamos con predict primero que es lo estándar.
-                    const prediccion = modelo.predict(img).dataSync();
+                    // 1. Tomar imagen
+                    let img = tf.browser.fromPixels(video);
                     
-                    // Como tu salida es Sigmoid (0 a 1), es un solo número
-                    const resultado = prediccion[0];
+                    // 2. Redimensionar a 100x100
+                    img = tf.image.resizeNearestNeighbor(img, [100, 100]);
 
-                    if (resultado >= 0.5) {
-                        resultadoDiv.innerText = "🐶 PERRO (" + resultado.toFixed(2) + ")";
+                    // 3. Convertir a Blanco y Negro (Mejor método)
+                    // Usamos rgbToGrayscale en lugar de mean, es más preciso
+                    img = tf.image.rgbToGrayscale(img); 
+
+                    // 4. Expandir dimensión del lote (Batch) -> (1, 100, 100, 1)
+                    img = img.expandDims();
+
+                    // 5. Convertir a flotante
+                    img = img.toFloat();
+
+                    // --- PRUEBA CRÍTICA ---
+                    // He eliminado el .div(255.0).
+                    // Si tu modelo fue entrenado con valores 0-255, esto arreglará el problema.
+                    // Si ves que todo sale mal, descomenta la línea de abajo:
+                    // img = img.div(255.0); 
+
+                    const prediccion = modelo.predict(img).dataSync();
+                    const valor = prediccion[0]; // Valor entre 0 y 1
+
+                    // Mostrar el número crudo para entender qué pasa
+                    probDiv.innerText = "Nivel de confianza: " + valor.toFixed(4);
+
+                    // Decidir
+                    if (valor >= 0.5) {
+                        resultadoDiv.innerText = "🐶 PERRO";
                         resultadoDiv.style.color = "blue";
                     } else {
-                        resultadoDiv.innerText = "🐱 GATO (" + resultado.toFixed(2) + ")";
+                        resultadoDiv.innerText = "🐱 GATO";
                         resultadoDiv.style.color = "green";
                     }
                 });
             }
-            requestAnimationFrame(predecirEnTiempoReal);
+            requestAnimationFrame(predecir);
         }
     </script>
 </body>
