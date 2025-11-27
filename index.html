@@ -3,20 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detector Perros vs Gatos</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <title>Detector Versión 3.0</title> <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: sans-serif;
             background-color: #f0f2f5;
             text-align: center;
             padding: 20px;
             color: #333;
         }
         h1 { margin-bottom: 10px; }
-        
-        /* Contenedor del video para que se vea bonito */
         .video-container {
             position: relative;
             width: 100%;
@@ -28,12 +25,7 @@
             overflow: hidden;
             background: #000;
         }
-        video {
-            width: 100%;
-            display: block;
-        }
-
-        /* Botón estilizado */
+        video { width: 100%; display: block; }
         button {
             margin-top: 20px;
             padding: 12px 25px;
@@ -43,29 +35,23 @@
             border: none;
             border-radius: 50px;
             cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            transition: background 0.3s;
         }
-        button:active { background-color: #0056b3; }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
-
-        /* Área de resultados */
+        button:disabled { background-color: #ccc; }
         #resultado {
             margin-top: 20px;
-            font-size: 26px;
+            font-size: 20px; /* Letra un poco más chica para que quepa el error */
             font-weight: bold;
             padding: 15px;
             background: white;
             border-radius: 10px;
             display: inline-block;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            word-wrap: break-word; /* Para que el texto de error no se corte */
         }
     </style>
 </head>
 <body>
 
-    <h1>🐶 vs 🐱</h1>
-    <p>Detector Inteligente</p>
+    <h1>🐶 vs 🐱 (V3.0)</h1>
 
     <div class="video-container">
         <video id="webcam" autoplay playsinline muted></video>
@@ -81,86 +67,61 @@
         const resultadoDiv = document.getElementById('resultado');
         const btnCamara = document.getElementById('btn-camara');
 
-        // 1. CARGAR EL MODELO
         (async () => {
             try {
-                console.log("Cargando modelo...");
-                // Asegúrate que los archivos estén en la misma carpeta
-                modelo = await tf.loadLayersModel('model.json'); 
+                console.log("Intentando cargar modelo...");
+                // CAMBIO CLAVE: Usamos ./ para ser explícitos
+                modelo = await tf.loadLayersModel('./model.json'); 
                 console.log("Modelo cargado exitosamente");
-                resultadoDiv.innerText = "Modelo listo. ¡Enciende la cámara!";
-                btnCamara.disabled = false; // Habilitar el botón
+                resultadoDiv.innerText = "Modelo cargado. ¡Listo!";
+                btnCamara.disabled = false;
             } catch (error) {
-                console.error("Error cargando el modelo:", error);
-                resultadoDiv.innerText = "Error: No encuentro el archivo model.json";
+                console.error("Error detallado:", error);
+                // ESTO ES LO IMPORTANTE: Te mostrará el error real en pantalla
+                resultadoDiv.innerText = "FALLO: " + error.message;
                 resultadoDiv.style.color = "red";
             }
         })();
 
-        // 2. INICIAR CÁMARA
         async function iniciarCamara() {
             try {
-                // Pide acceso a la cámara trasera (environment) si es celular
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "environment" } 
                 });
                 video.srcObject = stream;
-                btnCamara.style.display = "none"; // Ocultar botón tras iniciar
-                
-                // Cuando el video esté listo, empieza a predecir
+                btnCamara.style.display = "none";
                 video.onloadedmetadata = () => {
                     predecirEnTiempoReal();
                 };
             } catch (err) {
-                alert("Error al abrir la cámara: " + err.message);
+                alert("Error cámara: " + err.message);
             }
         }
 
-        // 3. BUCLE DE PREDICCIÓN (Ajustado a tus datos: 100x100, Blanco y Negro)
         async function predecirEnTiempoReal() {
             if (modelo) {
-                tf.tidy(() => { // tf.tidy limpia la memoria automáticamente
-                    
-                    // A. Obtener imagen de la webcam
-                    let img = tf.browser.fromPixels(video);
+                tf.tidy(() => {
+                    // Preprocesamiento exacto para tu modelo (100x100, B/N)
+                    let img = tf.browser.fromPixels(video)
+                        .resizeNearestNeighbor([100, 100])
+                        .mean(2)
+                        .expandDims(2)
+                        .expandDims()
+                        .toFloat()
+                        .div(255.0);
 
-                    // B. Cambiar tamaño a 100x100 (Según tu captura)
-                    img = tf.image.resizeNearestNeighbor(img, [100, 100]);
-
-                    // C. Convertir a Blanco y Negro (promediando canales RGB)
-                    // Esto reduce de 3 canales a 1 canal, pero elimina la dimensión final
-                    img = img.mean(2); 
-
-                    // D. Recuperar la dimensión del canal (100, 100) -> (100, 100, 1)
-                    img = img.expandDims(2);
-
-                    // E. Añadir dimensión del lote (batch) -> (1, 100, 100, 1)
-                    img = img.expandDims();
-
-                    // F. Normalizar (Dividir entre 255 para tener valores de 0 a 1)
-                    // IMPORTANTE: Casi todas las redes neuronales necesitan esto.
-                    img = img.toFloat().div(255.0);
-
-                    // G. Predecir
                     const prediccion = modelo.predict(img).dataSync();
                     const resultado = prediccion[0];
 
-                    // H. Mostrar resultado (0 = Gato, 1 = Perro, según tu código)
-                    // Usamos un umbral de 0.5
                     if (resultado >= 0.5) {
-                        resultadoDiv.innerText = "🐶 PERRO";
-                        resultadoDiv.style.color = "#007bff"; // Azul
+                        resultadoDiv.innerText = "🐶 PERRO (" + resultado.toFixed(2) + ")";
+                        resultadoDiv.style.color = "blue";
                     } else {
-                        resultadoDiv.innerText = "🐱 GATO";
-                        resultadoDiv.style.color = "#28a745"; // Verde
+                        resultadoDiv.innerText = "🐱 GATO (" + resultado.toFixed(2) + ")";
+                        resultadoDiv.style.color = "green";
                     }
-                    
-                    // Opcional: Mostrar la probabilidad para depurar
-                    // console.log("Probabilidad:", resultado);
                 });
             }
-            
-            // Repetir el ciclo lo más rápido posible sin trabar el navegador
             requestAnimationFrame(predecirEnTiempoReal);
         }
     </script>
