@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detector Versión 3.0</title> <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <title>Detector Versión 4.0</title> <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     
     <style>
         body {
@@ -39,19 +39,19 @@
         button:disabled { background-color: #ccc; }
         #resultado {
             margin-top: 20px;
-            font-size: 20px; /* Letra un poco más chica para que quepa el error */
+            font-size: 20px;
             font-weight: bold;
             padding: 15px;
             background: white;
             border-radius: 10px;
             display: inline-block;
-            word-wrap: break-word; /* Para que el texto de error no se corte */
+            word-wrap: break-word;
         }
     </style>
 </head>
 <body>
 
-    <h1>🐶 vs 🐱 (V3.0)</h1>
+    <h1>🐶 vs 🐱 (V4.0)</h1>
 
     <div class="video-container">
         <video id="webcam" autoplay playsinline muted></video>
@@ -70,14 +70,16 @@
         (async () => {
             try {
                 console.log("Intentando cargar modelo...");
-                // CAMBIO CLAVE: Usamos ./ para ser explícitos
-                modelo = await tf.loadLayersModel('./model.json'); 
+                
+                // --- CAMBIO IMPORTANTE AQUÍ ---
+                // Cambiamos loadLayersModel por loadGraphModel
+                modelo = await tf.loadGraphModel('./model.json'); 
+                
                 console.log("Modelo cargado exitosamente");
                 resultadoDiv.innerText = "Modelo cargado. ¡Listo!";
                 btnCamara.disabled = false;
             } catch (error) {
                 console.error("Error detallado:", error);
-                // ESTO ES LO IMPORTANTE: Te mostrará el error real en pantalla
                 resultadoDiv.innerText = "FALLO: " + error.message;
                 resultadoDiv.style.color = "red";
             }
@@ -101,7 +103,7 @@
         async function predecirEnTiempoReal() {
             if (modelo) {
                 tf.tidy(() => {
-                    // Preprocesamiento exacto para tu modelo (100x100, B/N)
+                    // Preprocesamiento (100x100, B/N, Normalizado)
                     let img = tf.browser.fromPixels(video)
                         .resizeNearestNeighbor([100, 100])
                         .mean(2)
@@ -110,7 +112,11 @@
                         .toFloat()
                         .div(255.0);
 
+                    // Para GraphModel, a veces predict funciona igual, a veces requiere execute.
+                    // Probamos con predict primero que es lo estándar.
                     const prediccion = modelo.predict(img).dataSync();
+                    
+                    // Como tu salida es Sigmoid (0 a 1), es un solo número
                     const resultado = prediccion[0];
 
                     if (resultado >= 0.5) {
