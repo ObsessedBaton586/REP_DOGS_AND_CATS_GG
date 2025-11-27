@@ -3,101 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detector V5.0 (Diagnóstico)</title>
+    <title>Detector V6.0 (Cámara Fix)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; text-align: center; color: #333; }
+        body { font-family: sans-serif; background: #222; text-align: center; color: white; }
         .video-container {
-            width: 100%; max-width: 400px; margin: 0 auto;
-            border: 5px solid #fff; border-radius: 15px;
-            background: #000; overflow: hidden;
+            width: 100%; max-width: 400px; margin: 20px auto;
+            border: 2px solid #fff; border-radius: 10px;
+            background: #000; overflow: hidden; height: 300px;
         }
-        video { width: 100%; }
-        #resultado {
-            margin-top: 20px; font-size: 24px; font-weight: bold;
-            padding: 20px; background: white; border-radius: 10px;
-            display: inline-block; border: 2px solid #ddd;
+        video { width: 100%; height: 100%; object-fit: cover; }
+        
+        button {
+            padding: 15px 30px; font-size: 20px;
+            background-color: #00ff88; color: #000;
+            border: none; border-radius: 50px; cursor: pointer;
+            font-weight: bold; margin-bottom: 20px;
         }
-        #probabilidad { font-size: 16px; color: #666; margin-top: 5px; }
+        #resultado { font-size: 24px; font-weight: bold; color: yellow; margin: 10px;}
+        #debug { font-size: 12px; color: #aaa; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-    <h1>🐶 vs 🐱 (V5.0)</h1>
+    <h1>🔍 V6.0 Debug</h1>
 
     <div class="video-container">
         <video id="webcam" autoplay playsinline muted></video>
     </div>
 
-    <div id="resultado">Cargando...</div>
-    <div id="probabilidad"></div>
-    <br>
-    <button onclick="iniciarCamara()">Iniciar Cámara</button>
+    <div id="resultado">Esperando acción...</div>
+    <button onclick="iniciarCamara()">📷 ACTIVAR CÁMARA</button>
+    <div id="debug">Log del sistema...</div>
 
     <script>
         let modelo = null;
         const video = document.getElementById('webcam');
         const resultadoDiv = document.getElementById('resultado');
-        const probDiv = document.getElementById('probabilidad');
+        const debugDiv = document.getElementById('debug');
+
+        // Log visual para ver errores en pantalla
+        function log(texto) {
+            console.log(texto);
+            debugDiv.innerText = texto;
+        }
 
         (async () => {
             try {
-                // Cargamos el grafo
+                log("Cargando modelo...");
+                // Intentamos cargar el grafo
                 modelo = await tf.loadGraphModel('./model.json'); 
-                resultadoDiv.innerText = "Modelo listo ✅";
+                log("✅ Modelo cargado. Toca el botón verde.");
+                resultadoDiv.innerText = "Modelo Listo. Toca el botón.";
             } catch (error) {
-                resultadoDiv.innerText = "Error: " + error.message;
+                log("❌ Error carga: " + error.message);
             }
         })();
 
         async function iniciarCamara() {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            video.srcObject = stream;
-            video.onloadedmetadata = () => predecir();
+            // ALERTA 1: Confirmar que el botón sirve
+            alert("Solicitando permiso de cámara..."); 
+
+            try {
+                // Configuración simple para evitar errores de compatibilidad
+                const constraints = { 
+                    audio: false, 
+                    video: { facingMode: "environment" } 
+                };
+
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                
+                log("Cámara accedida. Procesando...");
+                
+                video.onloadedmetadata = () => {
+                    video.play();
+                    alert("¡Cámara iniciada! Empezando a detectar...");
+                    predecir();
+                };
+            } catch (err) {
+                alert("ERROR AL ABRIR CÁMARA: " + err.name + " - " + err.message);
+                log("Fallo cámara: " + err.message);
+            }
         }
 
-        function predecir() {
+        async function predecir() {
             if (modelo) {
                 tf.tidy(() => {
-                    // 1. Tomar imagen
-                    let img = tf.browser.fromPixels(video);
-                    
-                    // 2. Redimensionar a 100x100
-                    img = tf.image.resizeNearestNeighbor(img, [100, 100]);
-
-                    // 3. Convertir a Blanco y Negro (Mejor método)
-                    // Usamos rgbToGrayscale en lugar de mean, es más preciso
-                    img = tf.image.rgbToGrayscale(img); 
-
-                    // 4. Expandir dimensión del lote (Batch) -> (1, 100, 100, 1)
-                    img = img.expandDims();
-
-                    // 5. Convertir a flotante
-                    img = img.toFloat();
-
-                    // --- PRUEBA CRÍTICA ---
-                    // He eliminado el .div(255.0).
-                    // Si tu modelo fue entrenado con valores 0-255, esto arreglará el problema.
-                    // Si ves que todo sale mal, descomenta la línea de abajo:
-                    // img = img.div(255.0); 
+                    // Procesamiento de imagen
+                    let img = tf.browser.fromPixels(video)
+                        .resizeNearestNeighbor([100, 100]) // Tamaño
+                        .mean(2) // Blanco y Negro
+                        .expandDims(2)
+                        .expandDims()
+                        .toFloat(); 
+                        // .div(255.0); // PRUEBA: Mantén esto comentado por ahora (datos 0-255)
 
                     const prediccion = modelo.predict(img).dataSync();
-                    const valor = prediccion[0]; // Valor entre 0 y 1
+                    const valor = prediccion[0];
 
-                    // Mostrar el número crudo para entender qué pasa
-                    probDiv.innerText = "Nivel de confianza: " + valor.toFixed(4);
-
-                    // Decidir
-                    if (valor >= 0.5) {
-                        resultadoDiv.innerText = "🐶 PERRO";
-                        resultadoDiv.style.color = "blue";
-                    } else {
-                        resultadoDiv.innerText = "🐱 GATO";
-                        resultadoDiv.style.color = "green";
-                    }
+                    // Mostrar valor crudo para diagnóstico
+                    resultadoDiv.innerText = valor < 0.5 ? 
+                        `🐱 GATO (${valor.toFixed(4)})` : 
+                        `🐶 PERRO (${valor.toFixed(4)})`;
                 });
             }
+            // Loop
             requestAnimationFrame(predecir);
         }
     </script>
