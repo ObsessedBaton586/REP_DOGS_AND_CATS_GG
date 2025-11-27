@@ -1,145 +1,290 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detector V7.0 (Dos Pasos)</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-    
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <title>Perros y Gatos - TensorflowJS</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+
     <style>
-        body { font-family: sans-serif; background: #222; text-align: center; color: white; }
-        h1 { margin: 10px; font-size: 20px; }
-        
-        .video-container {
-            width: 90%; max-width: 400px; margin: 10px auto;
-            border: 3px solid #fff; border-radius: 10px;
-            background: #000; height: 300px; position: relative;
-        }
-        video { width: 100%; height: 100%; object-fit: cover; }
-        
-        /* Botones grandes para dedos */
-        .btn {
-            padding: 15px 30px; font-size: 18px;
-            border: none; border-radius: 10px; cursor: pointer;
-            font-weight: bold; margin: 10px; width: 80%;
-        }
-        .btn-green { background-color: #28a745; color: white; }
-        .btn-blue { background-color: #007bff; color: white; display: none; } /* Oculto al inicio */
-        
-        #resultado { 
-            font-size: 24px; font-weight: bold; color: yellow; 
-            margin: 15px; min-height: 30px; 
-            background: rgba(255,255,255,0.1); padding: 10px; border-radius: 5px;
-        }
-        #debug { font-size: 12px; color: #aaa; margin-top: 10px; }
+      #resultado {
+        font-weight: bold;
+        font-size: 6rem;
+        text-align: center;
+      }
     </style>
-</head>
-<body>
-
-    <h1>🐶 vs 🐱 (V5.0)</h1>
-
-    <div class="video-container">
-        <video id="webcam" autoplay playsinline muted></video>
-    </div>
-
-    <div id="resultado">Paso 1: Enciende la cámara</div>
+  </head>
+  <body>
     
-    <button id="btn-camara" class="btn btn-green" onclick="encenderCamara()">1. Encender Cámara</button>
+    <main>
+      <div class="px-4 py-2 my-2 text-center border-bottom">
+        <img class="d-block mx-auto mb-2" src="LogotipoV2-Simple.png" alt="" width="80" height="80">
+        <h1 class="display-5 fw-bold">Perros y gatos</h1>
+        <div class="col-lg-6 mx-auto">
+          <p class="lead mb-0">Clasificaci&oacute;n de im&aacute;genes usando la c&aacute;mara web y Tensorflow.js</p>
+          <p class="lead mb-4">Asegúrate de que el archivo model.json esté en la misma carpeta.</p>
+        </div>
+      </div>
+
+      <div class="b-example-divider"></div>
+
+      <div class="container mt-5">
+        <div class="row">
+          <div class="col-12 col-md-4 offset-md-4 text-center">
+            <video id="video" playsinline autoplay style="width: 1px;"></video>
+            <button class="btn btn-primary mb-2" id="cambiar-camara" onclick="cambiarCamara();">Cambiar camara</button>
+            <canvas id="canvas" width="400" height="400" style="max-width: 100%;"></canvas>
+            <canvas id="otrocanvas" width="150" height="150" style="display: none"></canvas>
+            <div id="resultado">Cargando modelo...</div>            
+          </div>
+        </div>
+      </div>
+
+      <div class="b-example-divider"></div>
+
+      <div class="bg-dark text-secondary mt-5 px-4 py-2 text-center">
+        <div class="py-5">
+          <h1 class="display-5 fw-bold text-white">Ringa Tech</h1>
+          <div class="col-lg-6 mx-auto">
+            <p class="fs-5 mb-4">Revisa <a href="https://youtube.com/RingaTech">mi canal</a> para videos de inteligencia artificial, programaci&oacute;n, etc.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="b-example-divider mb-0"></div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.0.0/dist/tf.min.js"></script>
+
+  <script type="text/javascript">
+
+    // ==========================================
+    //       CONFIGURACIÓN DEL MODELO
+    // ==========================================
+    // Cambia estos valores para que coincidan con tu entrenamiento en Colab
     
-    <button id="btn-ia" class="btn btn-blue" onclick="comenzarPrediccion()">2. Activar Cerebro IA</button>
+    // 1. ¿Qué tamaño de imagen usaste en Colab? (Ej: 100, 150, 224)
+    var tamano_modelo = 100; 
 
-    <div id="debug">Esperando...</div>
+    // 2. ¿Entrenaste a Color (RGB) o Blanco y Negro (Grayscale)?
+    // true = Blanco y Negro (1 canal)
+    // false = Color (3 canales - RGB)
+    var usar_escala_grises = true; 
+    
+    // ==========================================
+    // ==========================================
 
-    <script>
-        let modelo = null;
-        let camaraActiva = false;
-        const video = document.getElementById('webcam');
-        const resultadoDiv = document.getElementById('resultado');
-        const debugDiv = document.getElementById('debug');
-        const btnCamara = document.getElementById('btn-camara');
-        const btnIA = document.getElementById('btn-ia');
+    var video = document.getElementById("video");
+    var canvas = document.getElementById("canvas");
+    var otrocanvas = document.getElementById("otrocanvas");
+    var ctx = canvas.getContext("2d");
+    var currentStream = null;
+    var facingMode = "user";
+    var modelo = null;
 
-        // Cargar modelo al iniciar la página
-        (async () => {
-            try {
-                debugDiv.innerText = "Cargando modelo...";
-                modelo = await tf.loadGraphModel('./model.json'); 
-                debugDiv.innerText = "Modelo cargado en memoria ✅";
-            } catch (error) {
-                debugDiv.innerText = "Error cargando modelo: " + error.message;
-            }
-        })();
+    // Ajustamos el canvas oculto al tamaño del modelo
+    otrocanvas.width = tamano_modelo;
+    otrocanvas.height = tamano_modelo;
 
-        // PASO 1: SOLO ENCENDER CÁMARA (Sin IA)
-        async function encenderCamara() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment" },
-                    audio: false
-                });
-                video.srcObject = stream;
-                video.play();
-                camaraActiva = true;
-                
-                // Si la cámara funciona, ocultamos botón 1 y mostramos botón 2
-                btnCamara.style.display = "none";
-                btnIA.style.display = "inline-block";
-                resultadoDiv.innerText = "¡Cámara lista! Ahora activa la IA 👇";
-                
-            } catch (err) {
-                alert("Error cámara: " + err.message);
-            }
+    (async() => {
+      console.log("Cargando modelo...");
+      try {
+        modelo = await tf.loadLayersModel("model.json");
+        console.log("Modelo cargado");
+        document.getElementById("resultado").innerHTML = "Modelo cargado!";
+      } catch (error) {
+        console.log("Error cargando modelo: " + error);
+        document.getElementById("resultado").innerHTML = "Error cargando modelo";
+      }
+    })();
+
+    window.onload = function() {
+      mostrarCamara();
+    }
+
+    function mostrarCamara() {
+      var opciones = {
+        audio: false,
+        video: {
+          width: 400, height: 400
+        }
+      }
+
+      if (navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia(opciones)
+            .then(function(stream) {
+              currentStream = stream;
+              video.srcObject = currentStream;
+              procesarCamara();
+              predecir();
+            })
+            .catch(function(err) {
+              alert("No se pudo utilizar la camara :(");
+              console.log(err);
+              alert(err);
+            })
+      } else {
+        alert("No existe la funcion getUserMedia");
+      }
+    }
+
+    function cambiarCamara() {
+          if (currentStream) {
+              currentStream.getTracks().forEach(track => {
+                  track.stop();
+              });
+          }
+
+          facingMode = facingMode == "user" ? "environment" : "user";
+
+          var opciones = {
+              audio: false,
+              video: {
+                  facingMode: facingMode, width: 400, height: 400
+              }
+          };
+
+          navigator.mediaDevices.getUserMedia(opciones)
+              .then(function(stream) {
+                  currentStream = stream;
+                  video.srcObject = currentStream;
+              })
+              .catch(function(err) {
+                  console.log("Oops, hubo un error", err);
+              })
+      }
+
+    function procesarCamara() {
+      ctx.drawImage(video, 0, 0, 400, 400, 0, 0, 400, 400);
+      setTimeout(procesarCamara, 20);
+    }
+
+    function predecir() {
+      if (modelo != null) {
+        // Redimensionar a la resolución del modelo (100x100, 150x150, etc.)
+        resample_single(canvas, tamano_modelo, tamano_modelo, otrocanvas);
+
+        var ctx2 = otrocanvas.getContext("2d");
+        var imgData = ctx2.getImageData(0,0, tamano_modelo, tamano_modelo);
+
+        var arr = []; // Arreglo completo
+        var arr_instancia = []; // Arreglo de una imagen
+
+        // Recorremos cada pixel
+        for (var p=0; p < imgData.data.length; p+= 4) {
+          var rojo = imgData.data[p] / 255;
+          var verde = imgData.data[p+1] / 255;
+          var azul = imgData.data[p+2] / 255;
+
+          if (usar_escala_grises) {
+             // Convertir a gris si el modelo lo requiere
+             var gris = (rojo+verde+azul)/3;
+             arr_instancia.push([gris]);
+          } else {
+             // Usar RGB si el modelo lo requiere
+             arr_instancia.push([rojo, verde, azul]);
+          }
         }
 
-        // PASO 2: ACTIVAR PREDICCIÓN
-        function comenzarPrediccion() {
-            if (!modelo) {
-                alert("El modelo aun no carga. Espera 5 segundos.");
-                return;
-            }
-            if (!camaraActiva) {
-                alert("Primero enciende la cámara.");
-                return;
-            }
-            
-            resultadoDiv.innerText = "🧠 Pensando...";
-            btnIA.style.display = "none"; // Ocultar botón para que no estorbe
-            predecirLoop();
+        // Metemos el arreglo de la imagen dentro de otro para cumplir con el batch size de 1
+        arr = [arr_instancia];
+
+        // Crear tensor
+        // La forma depende de si es gris [1, w, h, 1] o color [1, w, h, 3]
+        var canales = usar_escala_grises ? 1 : 3;
+        var tensor = tf.tensor4d(arr, [1, tamano_modelo, tamano_modelo, canales]);
+        
+        var resultado = modelo.predict(tensor).dataSync();
+        
+        var respuesta;
+        // Interpretación del resultado (asumiendo sigmoide donde <= 0.5 es clase 0, > 0.5 es clase 1)
+        if (resultado <= .5) {
+          respuesta = "Gato";
+        } else {
+          respuesta = "Perro";
         }
+        document.getElementById("resultado").innerHTML = respuesta;
 
-        async function predecirLoop() {
-            try {
-                tf.tidy(() => {
-                    // 1. Captura
-                    let img = tf.browser.fromPixels(video);
-                    
-                    // 2. Ajustes (100x100, Blanco y Negro)
-                    img = tf.image.resizeNearestNeighbor(img, [100, 100]);
-                    img = tf.image.rgbToGrayscale(img); 
-                    img = img.expandDims().toFloat(); // (1, 100, 100, 1)
+      }
 
-                    // 3. Predecir
-                    // IMPORTANTE: Si se traba aquí, es que el modelo es muy pesado para el celular
-                    const prediccion = modelo.predict(img).dataSync();
-                    const valor = prediccion[0];
+      setTimeout(predecir, 150);
+    }
 
-                    // 4. Mostrar
-                    if (valor >= 0.5) {
-                        resultadoDiv.innerText = "🐶 PERRO (" + valor.toFixed(2) + ")";
-                        resultadoDiv.style.color = "#00BFFF"; // Azul claro
-                    } else {
-                        resultadoDiv.innerText = "🐱 GATO (" + valor.toFixed(2) + ")";
-                        resultadoDiv.style.color = "#90EE90"; // Verde claro
-                    }
-                });
-                
-                // Ciclo infinito suave
-                requestAnimationFrame(predecirLoop);
-                
-            } catch (err) {
-                debugDiv.innerText = "Error al predecir: " + err.message;
-            }
-        }
-    </script>
-</body>
+    /**
+       * Hermite resize - fast image resize/resample using Hermite filter.
+       */
+      function resample_single(canvas, width, height, resize_canvas) {
+          var width_source = canvas.width;
+          var height_source = canvas.height;
+          width = Math.round(width);
+          height = Math.round(height);
+
+          var ratio_w = width_source / width;
+          var ratio_h = height_source / height;
+          var ratio_w_half = Math.ceil(ratio_w / 2);
+          var ratio_h_half = Math.ceil(ratio_h / 2);
+
+          var ctx = canvas.getContext("2d");
+          var ctx2 = resize_canvas.getContext("2d");
+          var img = ctx.getImageData(0, 0, width_source, height_source);
+          var img2 = ctx2.createImageData(width, height);
+          var data = img.data;
+          var data2 = img2.data;
+
+          for (var j = 0; j < height; j++) {
+              for (var i = 0; i < width; i++) {
+                  var x2 = (i + j * width) * 4;
+                  var weight = 0;
+                  var weights = 0;
+                  var weights_alpha = 0;
+                  var gx_r = 0;
+                  var gx_g = 0;
+                  var gx_b = 0;
+                  var gx_a = 0;
+                  var center_y = (j + 0.5) * ratio_h;
+                  var yy_start = Math.floor(j * ratio_h);
+                  var yy_stop = Math.ceil((j + 1) * ratio_h);
+                  for (var yy = yy_start; yy < yy_stop; yy++) {
+                      var dy = Math.abs(center_y - (yy + 0.5)) / ratio_h_half;
+                      var center_x = (i + 0.5) * ratio_w;
+                      var w0 = dy * dy; //pre-calc part of w
+                      var xx_start = Math.floor(i * ratio_w);
+                      var xx_stop = Math.ceil((i + 1) * ratio_w);
+                      for (var xx = xx_start; xx < xx_stop; xx++) {
+                          var dx = Math.abs(center_x - (xx + 0.5)) / ratio_w_half;
+                          var w = Math.sqrt(w0 + dx * dx);
+                          if (w >= 1) {
+                              //pixel too far
+                              continue;
+                          }
+                          //hermite filter
+                          weight = 2 * w * w * w - 3 * w * w + 1;
+                          var pos_x = 4 * (xx + yy * width_source);
+                          //alpha
+                          gx_a += weight * data[pos_x + 3];
+                          weights_alpha += weight;
+                          //colors
+                          if (data[pos_x + 3] < 255)
+                              weight = weight * data[pos_x + 3] / 250;
+                          gx_r += weight * data[pos_x];
+                          gx_g += weight * data[pos_x + 1];
+                          gx_b += weight * data[pos_x + 2];
+                          weights += weight;
+                      }
+                  }
+                  data2[x2] = gx_r / weights;
+                  data2[x2 + 1] = gx_g / weights;
+                  data2[x2 + 2] = gx_b / weights;
+                  data2[x2 + 3] = gx_a / weights_alpha;
+              }
+          }
+          ctx2.putImageData(img2, 0, 0);
+      }
+  </script>
+  </body>
 </html>
